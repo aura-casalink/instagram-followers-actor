@@ -3,11 +3,12 @@
     "type": "object",
     "schemaVersion": 1,
     "properties": {
-        "user_id": {
-            "title": "Target User ID",
+        "username": {
+            "title": "Target Username",
             "type": "string",
-            "description": "Instagram user ID to scrape followers from",
-            "editor": "textfield"
+            "description": "Instagram username to scrape followers from (without @)",
+            "editor": "textfield",
+            "example": "aura.place_es"
         },
         "session_id": {
             "title": "Session ID",
@@ -29,37 +30,12 @@
             "description": "The 'ds_user_id' cookie (optional)",
             "editor": "textfield"
         },
-        "ig_did": {
-            "title": "IG Device ID",
-            "type": "string",
-            "description": "The 'ig_did' cookie (optional)",
-            "editor": "textfield"
-        },
-        "mid": {
-            "title": "MID Cookie",
-            "type": "string",
-            "description": "The 'mid' cookie (optional)",
-            "editor": "textfield"
-        },
-        "www_claim": {
-            "title": "WWW Claim",
-            "type": "string",
-            "description": "X-IG-WWW-Claim header (optional)",
-            "editor": "textfield",
-            "default": "0"
-        },
         "max_followers": {
             "title": "Max Followers",
             "type": "integer",
             "description": "Max followers to scrape (empty = all)",
             "editor": "number"
-        },
-        "delay": {
-            "title": "Delay (seconds)",
-            "type": "number",
-            "description": "Delay between requests",
-            "default": 3.0
         }
     },
-    "required": ["user_id", "session_id", "csrf_token"]
+    "required": ["username", "session_id", "csrf_token"]
 }

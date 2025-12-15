@@ -1,215 +1,235 @@
 #!/usr/bin/env python3
 """
-Instagram Web API Followers Scraper - Apify Actor
-Uses www.instagram.com/api/v1/ endpoint with browser session cookies
+Instagram Followers Scraper using Playwright
+Intercepts API responses from a real browser session
 """
 
 import asyncio
 import json
-import time
-import random
-import requests
+from urllib.parse import unquote
 from apify import Actor
+from playwright.async_api import async_playwright
 
 
 async def main():
     async with Actor:
-        # Get input
         actor_input = await Actor.get_input() or {}
         
-        # Required parameters
-        user_id = actor_input.get("user_id")
+        # Input parameters
+        username = actor_input.get("username")
         session_id = actor_input.get("session_id")
         csrf_token = actor_input.get("csrf_token")
+        ds_user_id = actor_input.get("ds_user_id", "")
+        max_followers = actor_input.get("max_followers")
         
-        # Optional parameters with defaults
-        ds_user_id = actor_input.get("ds_user_id", user_id)
-        ig_did = actor_input.get("ig_did", "")
-        mid = actor_input.get("mid", "")
-        www_claim = actor_input.get("www_claim", "0")
-        
-        max_followers = actor_input.get("max_followers")  # None = unlimited
-        delay = actor_input.get("delay", 3.0)
-        
-        # Validate required inputs
-        if not user_id:
-            Actor.log.error("Missing required input: user_id")
-            await Actor.fail(status_message="Missing user_id")
+        if not username:
+            Actor.log.error("Missing required input: username")
+            await Actor.fail(status_message="Missing username")
             return
         
-        if not session_id:
-            Actor.log.error("Missing required input: session_id")
-            await Actor.fail(status_message="Missing session_id")
-            return
-            
-        if not csrf_token:
-            Actor.log.error("Missing required input: csrf_token")
-            await Actor.fail(status_message="Missing csrf_token")
+        if not session_id or not csrf_token:
+            Actor.log.error("Missing required cookies: session_id and csrf_token")
+            await Actor.fail(status_message="Missing session cookies")
             return
         
-        Actor.log.info(f"Starting Instagram Web API Followers Scraper")
-        Actor.log.info(f"Target user_id: {user_id}")
+        # Remove @ if present
+        username = username.lstrip("@")
+        
+        Actor.log.info(f"Starting Playwright scraper for @{username}")
         Actor.log.info(f"Max followers: {max_followers or 'unlimited'}")
-        Actor.log.info(f"Delay: {delay}s")
         
-        # Setup session
-        session = requests.Session()
-        
-        headers = {
-            "Accept": "*/*",
-            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Referer": f"https://www.instagram.com/",
-            "X-CSRFToken": csrf_token,
-            "X-IG-App-ID": "936619743392459",
-            "X-IG-WWW-Claim": www_claim,
-            "X-ASBD-ID": "359341",
-            "X-Requested-With": "XMLHttpRequest",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
-        }
-        
-        cookies = {
-            "sessionid": session_id,
-            "csrftoken": csrf_token,
-            "ds_user_id": ds_user_id,
-        }
-        
-        # Add optional cookies if provided
-        if ig_did:
-            cookies["ig_did"] = ig_did
-        if mid:
-            cookies["mid"] = mid
-        
-        session.headers.update(headers)
-        session.cookies.update(cookies)
-        
-        # Scraping loop
         all_followers = []
-        max_id = None
-        page = 0
-        total_request_time = 0
-        consecutive_errors = 0
-        max_consecutive_errors = 3
+        seen_pks = set()
+        scroll_count = 0
+        no_new_data_count = 0
+        max_no_new_data = 10  # Stop after 10 scrolls with no new data
         
-        while True:
-            page += 1
+        async with async_playwright() as p:
+            # Launch browser
+            browser = await p.chromium.launch(headless=True)
             
-            # Build URL
-            params = {
-                "count": 50,  # Server returns max 25, but we ask for 50
-                "search_surface": "follow_list_page",
-            }
+            context = await browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
             
-            if max_id:
-                params["max_id"] = max_id
+            # Set cookies
+            cookies = [
+                {
+                    "name": "sessionid",
+                    "value": unquote(session_id),
+                    "domain": ".instagram.com",
+                    "path": "/",
+                    "secure": True,
+                    "httpOnly": True,
+                },
+                {
+                    "name": "csrftoken",
+                    "value": csrf_token,
+                    "domain": ".instagram.com",
+                    "path": "/",
+                    "secure": True,
+                },
+                {
+                    "name": "ds_user_id",
+                    "value": ds_user_id or session_id.split("%3A")[0],
+                    "domain": ".instagram.com",
+                    "path": "/",
+                    "secure": True,
+                },
+            ]
             
-            url = f"https://www.instagram.com/api/v1/friendships/{user_id}/followers/"
+            await context.add_cookies(cookies)
+            
+            page = await context.new_page()
+            
+            # Intercept API responses
+            async def handle_response(response):
+                nonlocal no_new_data_count
+                
+                try:
+                    url = response.url
+                    if "/friendships/" in url and "/followers/" in url and response.status == 200:
+                        data = await response.json()
+                        users = data.get("users", [])
+                        
+                        new_count = 0
+                        for user in users:
+                            pk = str(user.get("pk"))
+                            if pk not in seen_pks:
+                                seen_pks.add(pk)
+                                follower = {
+                                    "pk": pk,
+                                    "username": user.get("username"),
+                                    "full_name": user.get("full_name"),
+                                    "is_private": user.get("is_private"),
+                                    "is_verified": user.get("is_verified"),
+                                    "profile_pic_url": user.get("profile_pic_url"),
+                                }
+                                all_followers.append(follower)
+                                new_count += 1
+                        
+                        if new_count > 0:
+                            no_new_data_count = 0
+                            Actor.log.info(f"Pulled {new_count} new followers (total: {len(all_followers)})")
+                        else:
+                            no_new_data_count += 1
+                            
+                except Exception as e:
+                    pass  # Ignore parsing errors for non-JSON responses
+            
+            page.on("response", handle_response)
+            
+            # Navigate to profile
+            Actor.log.info(f"Navigating to @{username} profile...")
             
             try:
-                start_time = time.time()
-                response = session.get(url, params=params, timeout=30)
-                request_time = time.time() - start_time
-                total_request_time += request_time
+                await page.goto(f"https://www.instagram.com/{username}/", wait_until="networkidle", timeout=30000)
+                await page.wait_for_timeout(2000)
+            except Exception as e:
+                Actor.log.error(f"Failed to load profile: {e}")
+                await Actor.fail(status_message=f"Failed to load profile: {e}")
+                return
+            
+            # Click on followers link
+            Actor.log.info("Opening followers dialog...")
+            
+            try:
+                # Try different selectors for followers link
+                followers_selector = f'a[href="/{username}/followers/"]'
+                await page.wait_for_selector(followers_selector, timeout=10000)
+                await page.click(followers_selector)
+                await page.wait_for_timeout(3000)
+            except Exception as e:
+                Actor.log.error(f"Could not find followers link: {e}")
+                # Try alternative: direct navigation
+                try:
+                    await page.goto(f"https://www.instagram.com/{username}/followers/", wait_until="networkidle", timeout=30000)
+                    await page.wait_for_timeout(3000)
+                except Exception as e2:
+                    Actor.log.error(f"Direct navigation also failed: {e2}")
+                    await Actor.fail(status_message="Could not open followers")
+                    return
+            
+            # Find the scrollable dialog
+            Actor.log.info("Starting to scroll and collect followers...")
+            
+            # Wait for followers list to appear
+            await page.wait_for_timeout(2000)
+            
+            # Scroll loop
+            while True:
+                scroll_count += 1
                 
-                Actor.log.info(f"Page {page}: Status {response.status_code} | Time: {request_time:.2f}s")
-                
-                if response.status_code == 200:
-                    consecutive_errors = 0
-                    data = response.json()
-                    
-                    users = data.get("users", [])
-                    next_max_id = data.get("next_max_id")
-                    
-                    # Process users
-                    for user in users:
-                        follower = {
-                            "pk": str(user.get("pk")),
-                            "username": user.get("username"),
-                            "full_name": user.get("full_name"),
-                            "is_private": user.get("is_private"),
-                            "is_verified": user.get("is_verified"),
-                            "profile_pic_url": user.get("profile_pic_url"),
-                        }
-                        all_followers.append(follower)
-                    
-                    Actor.log.info(f"  Got {len(users)} followers (total: {len(all_followers)})")
-                    
-                    # Check pagination
-                    if not next_max_id:
-                        Actor.log.info("Reached end of followers list")
-                        break
-                    
-                    max_id = next_max_id
-                    
-                    # Check max limit
-                    if max_followers and len(all_followers) >= max_followers:
-                        Actor.log.info(f"Reached max limit of {max_followers}")
-                        break
-                
-                elif response.status_code == 401:
-                    error_msg = response.json().get("message", "Unauthorized")
-                    Actor.log.error(f"Authentication error: {error_msg}")
-                    
-                    # Check if it's a temporary rate limit or permanent auth failure
-                    if "wait" in error_msg.lower():
-                        Actor.log.warning("Rate limited. Waiting 60s before retry...")
-                        await asyncio.sleep(60)
-                        continue
-                    else:
-                        await Actor.fail(status_message=f"Auth failed: {error_msg}")
-                        return
-                
-                elif response.status_code == 429:
-                    Actor.log.warning("Rate limited (429). Waiting 60s...")
-                    await asyncio.sleep(60)
-                    continue
-                
-                else:
-                    consecutive_errors += 1
-                    Actor.log.error(f"Error {response.status_code}: {response.text[:200]}")
-                    
-                    if consecutive_errors >= max_consecutive_errors:
-                        Actor.log.error(f"Too many consecutive errors ({consecutive_errors}). Stopping.")
-                        break
-                    
-                    await asyncio.sleep(10)
-                    continue
-                    
-            except requests.exceptions.RequestException as e:
-                consecutive_errors += 1
-                Actor.log.error(f"Request exception: {e}")
-                
-                if consecutive_errors >= max_consecutive_errors:
-                    Actor.log.error(f"Too many consecutive errors. Stopping.")
+                # Check if we've reached max
+                if max_followers and len(all_followers) >= max_followers:
+                    Actor.log.info(f"Reached max followers limit: {max_followers}")
                     break
                 
-                await asyncio.sleep(10)
-                continue
+                # Check if no new data for too long
+                if no_new_data_count >= max_no_new_data:
+                    Actor.log.info(f"No new data after {max_no_new_data} scrolls, assuming end reached")
+                    break
+                
+                # Scroll the followers dialog
+                try:
+                    # Find the scrollable container (the dialog with followers list)
+                    scroll_script = """
+                        const dialog = document.querySelector('div[role="dialog"]');
+                        if (dialog) {
+                            const scrollable = dialog.querySelector('div[style*="overflow"]') || 
+                                              dialog.querySelector('div[class*="scroll"]') ||
+                                              dialog.querySelectorAll('div')[5];
+                            if (scrollable) {
+                                scrollable.scrollTop = scrollable.scrollHeight;
+                                return true;
+                            }
+                        }
+                        // Fallback: try to scroll any visible scrollable element
+                        const scrollables = document.querySelectorAll('[style*="overflow: auto"], [style*="overflow-y: auto"]');
+                        for (const el of scrollables) {
+                            if (el.scrollHeight > el.clientHeight) {
+                                el.scrollTop = el.scrollHeight;
+                                return true;
+                            }
+                        }
+                        return false;
+                    """
+                    
+                    scrolled = await page.evaluate(scroll_script)
+                    
+                    if not scrolled:
+                        # Alternative: keyboard scroll
+                        await page.keyboard.press("End")
+                    
+                except Exception as e:
+                    Actor.log.warning(f"Scroll error: {e}")
+                
+                # Wait for new content to load
+                await page.wait_for_timeout(2000)
+                
+                # Log progress every 10 scrolls
+                if scroll_count % 10 == 0:
+                    Actor.log.info(f"Scroll {scroll_count}: {len(all_followers)} followers collected")
             
-            # Delay with jitter
-            jitter = delay * 0.2
-            sleep_time = delay + random.uniform(-jitter, jitter)
-            await asyncio.sleep(sleep_time)
+            await browser.close()
         
-        # Log summary
+        # Results
         Actor.log.info("=" * 50)
         Actor.log.info("SCRAPING COMPLETE")
         Actor.log.info("=" * 50)
         Actor.log.info(f"Total followers: {len(all_followers)}")
-        Actor.log.info(f"Total pages: {page}")
-        Actor.log.info(f"Total request time: {total_request_time:.2f}s")
-        if page > 0:
-            Actor.log.info(f"Avg request time: {total_request_time/page:.2f}s")
+        Actor.log.info(f"Total scrolls: {scroll_count}")
         
-        # Push results to dataset
         if all_followers:
+            # Trim to max if needed
+            if max_followers and len(all_followers) > max_followers:
+                all_followers = all_followers[:max_followers]
+            
             await Actor.push_data(all_followers)
             Actor.log.info(f"Pushed {len(all_followers)} followers to dataset")
         else:
-            Actor.log.warning("No followers scraped")
+            Actor.log.warning("No followers collected")
 
 
 if __name__ == "__main__":
