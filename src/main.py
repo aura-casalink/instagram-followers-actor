@@ -6,6 +6,7 @@ import asyncio
 import requests
 import json
 import time
+import random
 from datetime import datetime
 from apify import Actor
 
@@ -21,8 +22,8 @@ class InstagramScraper:
         self.headers = {
             "User-Agent": "Instagram 330.0.0.40.92 Android (34/14; 420dpi; 1080x2400; Google/google; sdk_gphone64_arm64; emu64a; ranchu; en_US; 598323397)",
             "X-IG-App-ID": "567067343352427",
-            "X-IG-Device-ID": "android-1234567890abcdef",
-            "X-IG-Android-ID": "android-1234567890abcdef",
+            "X-IG-Device-ID": "android-acd484febac47e6b",
+            "X-IG-Android-ID": "android-acd484febac47e6b",
             "X-IG-Connection-Type": "WIFI",
             "X-IG-Capabilities": "3brTvx0=",
             "Accept-Language": "en-US,en;q=0.9",
@@ -35,8 +36,8 @@ class InstagramScraper:
             if value:
                 self.session.cookies.set(key, value, domain=".instagram.com")
     
-    def get_followers(self, user_id: str, max_id: str = None) -> tuple[dict, float]:
-        """Returns (data, request_time_seconds)"""
+    def get_followers(self, user_id: str, max_id: str = None) -> tuple:
+        """Returns (response, request_time_seconds)"""
         url = f"{self.base_url}/friendships/{user_id}/followers/"
         
         params = {"count": 100, "search_surface": "follow_list_page"}
@@ -67,12 +68,11 @@ class InstagramScraper:
             
             # Handle rate limiting with retry
             if response.status_code == 401 or response.status_code == 429:
-                Actor.log.warning(f"Rate limited. Waiting 60s before retry...")
+                Actor.log.warning(f"Rate limited. Waiting 20s before retry...")
                 time.sleep(20)
                 current_delay = 6.0
                 Actor.log.info(f"Increased delay to {current_delay:.1f}s")
                 
-                # Retry once
                 response, request_time = self.get_followers(user_id, max_id)
                 total_request_time += request_time
                 
@@ -106,7 +106,12 @@ class InstagramScraper:
                 break
             
             page += 1
-            time.sleep(current_delay)
+            
+            # Jitter: delay ± 30%
+            jitter = current_delay * 0.3
+            sleep_time = current_delay + random.uniform(-jitter, jitter)
+            Actor.log.info(f"Sleeping {sleep_time:.2f}s")
+            time.sleep(sleep_time)
         
         # Log timing summary
         total_time = time.time() - total_start_time
@@ -127,7 +132,7 @@ async def main():
         user_id = actor_input.get("user_id")
         authorization_token = actor_input.get("authorization_token", "")
         max_followers = actor_input.get("max_followers")
-        delay = actor_input.get("delay", 3.0)  # Default aumentado a 3s
+        delay = actor_input.get("delay", 3.0)
         webhook_url = actor_input.get("webhook_url")
         
         cookies = {
