@@ -1,83 +1,88 @@
-# Instagram Followers Scraper
+# Instagram Followers Scraper (Web API)
 
-Apify Actor que extrae la lista de seguidores de una cuenta de Instagram usando la API privada móvil.
+Scrapes Instagram followers using the Web API endpoint (`www.instagram.com/api/v1/`). This method is more stable than the mobile API and has more lenient rate limits.
 
-## ⚠️ Requisitos
+## How It Works
 
-Este actor requiere tokens de autenticación que debes obtener de una sesión activa de Instagram. Los tokens expiran periódicamente y necesitan ser renovados.
+This actor uses the same API endpoint that Instagram's web interface uses when you view followers. It requires browser session cookies for authentication.
 
-### Cómo obtener los tokens
+### Advantages over Mobile API
+- More lenient rate limits
+- Faster response times (~0.3-0.5s per request)
+- No device ID fingerprinting
+- Works with regular browser session
 
-1. Instala Frida en tu ordenador
-2. Configura un emulador Android con la app de Instagram
-3. Usa el script de Frida para capturar las cookies de sesión
-4. Copia los valores de:
-   - `authorization` (Bearer token)
-   - `x-mid`
-   - `ig-u-ds-user-id`
-   - `ig-u-rur`
+### Rate Limits
+- ~25 followers per request (Instagram's limit)
+- Recommended delay: 3 seconds between requests
+- 10,000 followers ≈ 400 requests ≈ 20 minutes
 
-## 📥 Input
+## Getting Your Session Cookies
 
-| Parámetro | Tipo | Requerido | Descripción |
-|-----------|------|-----------|-------------|
-| `user_id` | string | ✅ | ID numérico de la cuenta de Instagram |
-| `authorization_token` | string | ✅ | Bearer token (formato: `Bearer IGT:2:xxxxx`) |
-| `cookie_x_mid` | string | ❌ | Cookie x-mid |
-| `cookie_ds_user_id` | string | ❌ | Cookie ds_user_id |
-| `cookie_rur` | string | ❌ | Cookie rur |
-| `max_followers` | integer | ❌ | Límite máximo de seguidores |
-| `delay` | number | ❌ | Delay entre requests (default: 2s) |
-| `webhook_url` | string | ❌ | URL para notificar cuando termine |
+1. Open Instagram in Chrome (logged in)
+2. Press F12 → Application → Cookies → instagram.com
+3. Copy these values:
+   - `sessionid` (required)
+   - `csrftoken` (required)
+   - `ds_user_id` (recommended)
+   - `ig_did` (optional)
+   - `mid` (optional)
 
-## 📤 Output
+4. For the `www_claim` header:
+   - Open Network tab
+   - Navigate to any page on Instagram
+   - Find a request to `www.instagram.com/api/`
+   - Copy the `X-IG-WWW-Claim` header value
 
-Cada follower en el dataset contiene:
-
-```json
-{
-  "pk": 12345678,
-  "username": "ejemplo_user",
-  "full_name": "Nombre Completo",
-  "is_private": false,
-  "is_verified": false,
-  "profile_pic_url": "https://...",
-  "scraped_at": "2024-01-15T12:00:00"
-}
-```
-
-## 🔗 Integración con n8n
-
-1. Configura el `webhook_url` con tu endpoint de n8n
-2. El actor enviará un POST cuando termine:
+## Input Example
 
 ```json
 {
-  "event": "followers_scraped",
-  "user_id": "71392995955",
-  "total_followers": 10031,
-  "scraped_at": "2024-01-15T12:00:00"
+    "user_id": "71392995955",
+    "session_id": "71392995955%3AABCdef123...",
+    "csrf_token": "abcdef123456",
+    "ds_user_id": "71392995955",
+    "ig_did": "E81EB5F6-41E2-45F0-A52D-4BCA2A643535",
+    "mid": "aCcVEAAEAAEcPVNdmW4KWah3dBHd",
+    "www_claim": "hmac.AR01V2x7Wz2k...",
+    "max_followers": null,
+    "delay": 3.0
 }
 ```
 
-3. En n8n, compara con Supabase para detectar nuevos seguidores
+## Output
 
-## 🚀 Desarrollo local
+Each follower object contains:
 
-```bash
-# Crear entorno virtual
-python -m venv venv
-source venv/bin/activate
-
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Ejecutar localmente
-apify run
+```json
+{
+    "pk": "12345678",
+    "username": "example_user",
+    "full_name": "Example User",
+    "is_private": false,
+    "is_verified": false,
+    "profile_pic_url": "https://..."
+}
 ```
 
-## 📝 Notas
+## Cookie Expiration
 
-- Los tokens de Instagram expiran. Si recibes errores 401, renueva los tokens.
-- Respeta los rate limits de Instagram. El delay default de 2s es conservador.
-- Este actor es para uso personal/educativo.
+- `sessionid`: ~1 year
+- `csrftoken`: ~1 year  
+- Other cookies: Various expiration times
+
+The session remains valid as long as you don't log out from that browser session.
+
+## Troubleshooting
+
+### 401 Unauthorized
+- Your session cookies have expired
+- Get fresh cookies from browser
+
+### 429 Rate Limited
+- Increase the delay parameter
+- Wait a few minutes before retrying
+
+### Empty Results
+- Verify the user_id is correct
+- Check if the target account exists and has followers

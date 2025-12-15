@@ -1,1 +1,1 @@
-# Instagram Followers Scraper
+# Instagram Followers Web API Actor
