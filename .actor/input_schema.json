@@ -19,19 +19,20 @@
         "device_id": {
             "title": "Device ID",
             "type": "string",
-            "description": "Android device ID",
+            "description": "Android device ID from Frida",
             "default": "android-acd484febac47e6b",
             "editor": "textfield"
         },
         "max_followers": {
             "title": "Max Followers",
             "type": "integer",
-            "description": "Limit (empty = all)",
+            "description": "Maximum followers to scrape (empty for all)",
             "editor": "number"
         },
         "delay": {
             "title": "Delay (seconds)",
             "type": "number",
+            "description": "Delay between requests in seconds",
             "default": 2.0,
             "editor": "number"
         }
