@@ -2,6 +2,7 @@
 Instagram Followers Scraper - Apify Actor
 """
 
+import asyncio
 import requests
 import json
 import time
@@ -33,7 +34,7 @@ class InstagramScraper:
         
         # Set cookies
         for key, value in cookies.items():
-            if value:  # Solo si hay valor
+            if value:
                 self.session.cookies.set(key, value, domain=".instagram.com")
     
     def get_followers(self, user_id: str, max_id: str = None) -> dict:
@@ -54,7 +55,7 @@ class InstagramScraper:
             
         return response.json()
 
-    async def get_all_followers(self, user_id: str, max_followers: int = None, delay: float = 2.0) -> list:
+    def get_all_followers(self, user_id: str, max_followers: int = None, delay: float = 2.0) -> list:
         all_followers = []
         max_id = None
         page = 1
@@ -110,12 +111,9 @@ async def main():
             "ig-u-rur": actor_input.get("cookie_rur", ""),
         }
         
-        # Log inputs (sin secretos completos)
+        # Log inputs
         Actor.log.info(f"user_id: {user_id}")
         Actor.log.info(f"authorization_token length: {len(authorization_token)}")
-        Actor.log.info(f"authorization_token starts with Bearer: {authorization_token.startswith('Bearer ')}")
-        Actor.log.info(f"cookie_x_mid length: {len(cookies['x-mid'])}")
-        Actor.log.info(f"cookie_rur length: {len(cookies['ig-u-rur'])}")
         Actor.log.info(f"max_followers: {max_followers}")
         Actor.log.info(f"delay: {delay}")
         
@@ -131,7 +129,7 @@ async def main():
         scraper = InstagramScraper(authorization_token, cookies)
         
         # Scrape followers
-        followers = await scraper.get_all_followers(user_id, max_followers, delay)
+        followers = scraper.get_all_followers(user_id, max_followers, delay)
         
         Actor.log.info(f"Scraped {len(followers)} followers total")
         
@@ -168,3 +166,7 @@ async def main():
                 Actor.log.error(f"Webhook failed: {e}")
         
         Actor.log.info("Done!")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
