@@ -1,41 +1,82 @@
 {
-    "title": "Instagram Mobile API Scraper",
+    "title": "Instagram Followers Scraper Input",
+    "description": "Configuration for the Instagram Mobile API followers scraper",
     "type": "object",
     "schemaVersion": 1,
+    "required": ["user_id", "authorization"],
     "properties": {
         "user_id": {
-            "title": "Target User ID",
+            "title": "User ID",
+            "description": "Instagram user ID to scrape followers from (numeric ID, not username)",
             "type": "string",
-            "description": "Instagram user ID (numeric)",
-            "editor": "textfield"
+            "editor": "textfield",
+            "example": "71392995955"
         },
         "authorization": {
             "title": "Authorization Token",
+            "description": "Bearer token from Instagram app. Get this using Frida. Format: IGT:2:eyJ...",
             "type": "string",
-            "description": "Bearer token (IGT:2:...)",
             "editor": "textfield",
-            "isSecret": true
+            "isSecret": true,
+            "example": "IGT:2:eyJkc191c2VyX2lkIjo..."
         },
         "device_id": {
             "title": "Device ID",
+            "description": "X-IG-Device-ID header value (UUID format). Capture with Frida.",
             "type": "string",
-            "description": "Android device ID from Frida",
+            "editor": "textfield",
+            "default": "c6dfb4fc-7663-46a8-8633-fd77d4dfe168",
+            "example": "c6dfb4fc-7663-46a8-8633-fd77d4dfe168"
+        },
+        "android_id": {
+            "title": "Android ID",
+            "description": "X-IG-Android-ID header value. Format: android-[16 hex chars]",
+            "type": "string",
+            "editor": "textfield",
             "default": "android-acd484febac47e6b",
-            "editor": "textfield"
+            "example": "android-acd484febac47e6b"
+        },
+        "family_device_id": {
+            "title": "Family Device ID",
+            "description": "X-IG-Family-Device-ID header value (UUID format). Optional.",
+            "type": "string",
+            "editor": "textfield",
+            "default": "4d8511b5-b0fe-46a1-aef0-1ba731e6d394",
+            "example": "4d8511b5-b0fe-46a1-aef0-1ba731e6d394"
+        },
+        "www_claim": {
+            "title": "WWW Claim (IMPORTANT)",
+            "description": "X-IG-WWW-Claim HMAC token. CRITICAL for avoiding blocks. Capture with Frida when accessing followers.",
+            "type": "string",
+            "editor": "textfield",
+            "isSecret": true,
+            "example": "hmac.AR0whHhd26sGoKFlEOpIzAA3mPI9c5-4oorEzCbGTpYeZrGJ"
         },
         "max_followers": {
             "title": "Max Followers",
+            "description": "Maximum number of followers to scrape. Leave empty for all.",
             "type": "integer",
-            "description": "Maximum followers to scrape (empty for all)",
-            "editor": "number"
+            "editor": "number",
+            "minimum": 1,
+            "nullable": true
         },
-        "delay": {
-            "title": "Delay (seconds)",
+        "delay_min": {
+            "title": "Minimum Delay (seconds)",
+            "description": "Minimum delay between requests",
             "type": "number",
-            "description": "Delay between requests in seconds",
+            "editor": "number",
             "default": 2.0,
-            "editor": "number"
+            "minimum": 0.5,
+            "maximum": 60
+        },
+        "delay_max": {
+            "title": "Maximum Delay (seconds)",
+            "description": "Maximum delay between requests (randomized between min and max)",
+            "type": "number",
+            "editor": "number",
+            "default": 5.0,
+            "minimum": 1,
+            "maximum": 120
         }
-    },
-    "required": ["user_id", "authorization"]
+    }
 }
