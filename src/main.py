@@ -15,7 +15,6 @@ class InstagramScraper:
         self.session = requests.Session()
         self.base_url = "https://i.instagram.com/api/v1"
         
-        # Asegurar formato correcto del token
         if not authorization_token.startswith("Bearer "):
             authorization_token = f"Bearer {authorization_token}"
         
@@ -32,44 +31,63 @@ class InstagramScraper:
             "Authorization": authorization_token,
         }
         
-        # Set cookies
         for key, value in cookies.items():
             if value:
                 self.session.cookies.set(key, value, domain=".instagram.com")
     
-    def get_followers(self, user_id: str, max_id: str = None) -> dict:
+    def get_followers(self, user_id: str, max_id: str = None) -> tuple[dict, float]:
+        """Returns (data, request_time_seconds)"""
         url = f"{self.base_url}/friendships/{user_id}/followers/"
         
         params = {"count": 100, "search_surface": "follow_list_page"}
         if max_id:
             params["max_id"] = max_id
         
-        Actor.log.info(f"Requesting: {url}")
+        start_time = time.time()
         response = self.session.get(url, headers=self.headers, params=params)
+        request_time = time.time() - start_time
         
-        Actor.log.info(f"Response status: {response.status_code}")
-        
-        if response.status_code != 200:
-            Actor.log.error(f"Error response: {response.text[:500]}")
-            return None
-            
-        return response.json()
+        return response, request_time
 
-    def get_all_followers(self, user_id: str, max_followers: int = None, delay: float = 2.0) -> list:
+    def get_all_followers(self, user_id: str, max_followers: int = None, base_delay: float = 3.0) -> list:
         all_followers = []
         max_id = None
         page = 1
+        current_delay = base_delay
+        total_start_time = time.time()
+        total_request_time = 0
         
         while True:
             Actor.log.info(f"Fetching page {page}...")
-            data = self.get_followers(user_id, max_id)
             
-            if not data:
-                Actor.log.warning("No data returned")
-                break
+            response, request_time = self.get_followers(user_id, max_id)
+            total_request_time += request_time
+            
+            Actor.log.info(f"Request time: {request_time:.2f}s | Status: {response.status_code}")
+            
+            # Handle rate limiting with retry
+            if response.status_code == 401 or response.status_code == 429:
+                Actor.log.warning(f"Rate limited. Waiting 60s before retry...")
+                time.sleep(20)
+                current_delay = 6.0
+                Actor.log.info(f"Increased delay to {current_delay:.1f}s")
                 
+                # Retry once
+                response, request_time = self.get_followers(user_id, max_id)
+                total_request_time += request_time
+                
+                if response.status_code != 200:
+                    Actor.log.error(f"Retry failed: {response.status_code} - {response.text[:200]}")
+                    break
+            
+            if response.status_code != 200:
+                Actor.log.error(f"Error: {response.status_code} - {response.text[:200]}")
+                break
+            
+            data = response.json()
+            
             if "users" not in data:
-                Actor.log.warning(f"No users in response: {json.dumps(data)[:500]}")
+                Actor.log.warning(f"No users in response")
                 break
                 
             followers = data["users"]
@@ -88,36 +106,41 @@ class InstagramScraper:
                 break
             
             page += 1
-            time.sleep(delay)
+            time.sleep(current_delay)
+        
+        # Log timing summary
+        total_time = time.time() - total_start_time
+        Actor.log.info(f"=== TIMING SUMMARY ===")
+        Actor.log.info(f"Total requests: {page}")
+        Actor.log.info(f"Total request time: {total_request_time:.2f}s")
+        Actor.log.info(f"Total execution time: {total_time:.2f}s")
+        Actor.log.info(f"Avg request time: {total_request_time/page:.2f}s")
+        Actor.log.info(f"======================")
             
         return all_followers
 
 
 async def main():
     async with Actor:
-        # Get input
         actor_input = await Actor.get_input() or {}
         
         user_id = actor_input.get("user_id")
         authorization_token = actor_input.get("authorization_token", "")
         max_followers = actor_input.get("max_followers")
-        delay = actor_input.get("delay", 2.0)
+        delay = actor_input.get("delay", 3.0)  # Default aumentado a 3s
         webhook_url = actor_input.get("webhook_url")
         
-        # Cookies
         cookies = {
             "x-mid": actor_input.get("cookie_x_mid", ""),
             "ig-u-ds-user-id": actor_input.get("cookie_ds_user_id", ""),
             "ig-u-rur": actor_input.get("cookie_rur", ""),
         }
         
-        # Log inputs
         Actor.log.info(f"user_id: {user_id}")
         Actor.log.info(f"authorization_token length: {len(authorization_token)}")
         Actor.log.info(f"max_followers: {max_followers}")
         Actor.log.info(f"delay: {delay}")
         
-        # Validate required inputs
         if not user_id:
             raise ValueError("user_id is required")
         if not authorization_token:
@@ -125,15 +148,11 @@ async def main():
         
         Actor.log.info(f"Starting Instagram Followers Scraper for user_id: {user_id}")
         
-        # Initialize scraper
         scraper = InstagramScraper(authorization_token, cookies)
-        
-        # Scrape followers
         followers = scraper.get_all_followers(user_id, max_followers, delay)
         
         Actor.log.info(f"Scraped {len(followers)} followers total")
         
-        # Save to dataset
         for follower in followers:
             await Actor.push_data({
                 "pk": follower.get("pk"),
@@ -145,14 +164,12 @@ async def main():
                 "scraped_at": datetime.now().isoformat(),
             })
         
-        # Save summary
         await Actor.set_value("summary", {
             "user_id": user_id,
             "total_followers": len(followers),
             "scraped_at": datetime.now().isoformat(),
         })
         
-        # Webhook
         if webhook_url and len(followers) > 0:
             try:
                 requests.post(webhook_url, json={
