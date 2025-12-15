@@ -1,65 +1,65 @@
 {
     "title": "Instagram Followers Scraper Input",
-    "description": "Configuration for the Instagram Followers Scraper",
     "type": "object",
     "schemaVersion": 1,
     "properties": {
         "user_id": {
-            "title": "User ID",
+            "title": "Target User ID",
             "type": "string",
-            "description": "Instagram user ID (numeric). You can find this using the mobile app inspection.",
-            "editor": "textfield",
-            "example": "71392995955"
-        },
-        "authorization_token": {
-            "title": "Authorization Token",
-            "type": "string",
-            "description": "Bearer token from Instagram app. Format: Bearer IGT:2:xxxxx",
-            "editor": "textfield",
-            "isSecret": true
-        },
-        "cookie_x_mid": {
-            "title": "Cookie: x-mid",
-            "type": "string",
-            "description": "x-mid cookie value from Instagram session",
-            "editor": "textfield",
-            "isSecret": true
-        },
-        "cookie_ds_user_id": {
-            "title": "Cookie: ig-u-ds-user-id",
-            "type": "string",
-            "description": "ds_user_id cookie value (usually same as user_id)",
+            "description": "Instagram user ID to scrape followers from",
             "editor": "textfield"
         },
-        "cookie_rur": {
-            "title": "Cookie: ig-u-rur",
+        "session_id": {
+            "title": "Session ID",
             "type": "string",
-            "description": "rur cookie value from Instagram session",
+            "description": "The 'sessionid' cookie from Instagram browser session",
             "editor": "textfield",
             "isSecret": true
+        },
+        "csrf_token": {
+            "title": "CSRF Token",
+            "type": "string",
+            "description": "The 'csrftoken' cookie from Instagram browser session",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "ds_user_id": {
+            "title": "DS User ID",
+            "type": "string",
+            "description": "The 'ds_user_id' cookie (optional)",
+            "editor": "textfield"
+        },
+        "ig_did": {
+            "title": "IG Device ID",
+            "type": "string",
+            "description": "The 'ig_did' cookie (optional)",
+            "editor": "textfield"
+        },
+        "mid": {
+            "title": "MID Cookie",
+            "type": "string",
+            "description": "The 'mid' cookie (optional)",
+            "editor": "textfield"
+        },
+        "www_claim": {
+            "title": "WWW Claim",
+            "type": "string",
+            "description": "X-IG-WWW-Claim header (optional)",
+            "editor": "textfield",
+            "default": "0"
         },
         "max_followers": {
             "title": "Max Followers",
             "type": "integer",
-            "description": "Maximum number of followers to scrape. Leave empty for all.",
-            "editor": "number",
-            "minimum": 1
+            "description": "Max followers to scrape (empty = all)",
+            "editor": "number"
         },
         "delay": {
-            "title": "Delay Between Requests (seconds)",
+            "title": "Delay (seconds)",
             "type": "number",
-            "description": "Delay between pagination requests to avoid rate limiting",
-            "editor": "number",
-            "default": 2.0,
-            "minimum": 0.5,
-            "maximum": 10
-        },
-        "webhook_url": {
-            "title": "Webhook URL",
-            "type": "string",
-            "description": "Optional webhook URL to notify when scraping is complete (for n8n integration)",
-            "editor": "textfield"
+            "description": "Delay between requests",
+            "default": 3.0
         }
     },
-    "required": ["user_id", "authorization_token"]
+    "required": ["user_id", "session_id", "csrf_token"]
 }
