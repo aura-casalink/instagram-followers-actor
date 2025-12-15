@@ -1,41 +1,40 @@
 {
-    "title": "Instagram Followers Scraper Input",
+    "title": "Instagram Mobile API Scraper",
     "type": "object",
     "schemaVersion": 1,
     "properties": {
-        "username": {
-            "title": "Target Username",
+        "user_id": {
+            "title": "Target User ID",
             "type": "string",
-            "description": "Instagram username to scrape followers from (without @)",
-            "editor": "textfield",
-            "example": "aura.place_es"
+            "description": "Instagram user ID (numeric)",
+            "editor": "textfield"
         },
-        "session_id": {
-            "title": "Session ID",
+        "authorization": {
+            "title": "Authorization Token",
             "type": "string",
-            "description": "The 'sessionid' cookie from Instagram browser session",
-            "editor": "textfield",
-            "isSecret": true
-        },
-        "csrf_token": {
-            "title": "CSRF Token",
-            "type": "string",
-            "description": "The 'csrftoken' cookie from Instagram browser session",
+            "description": "Bearer token (IGT:2:...)",
             "editor": "textfield",
             "isSecret": true
         },
-        "ds_user_id": {
-            "title": "DS User ID",
+        "device_id": {
+            "title": "Device ID",
             "type": "string",
-            "description": "The 'ds_user_id' cookie (optional)",
+            "description": "Android device ID",
+            "default": "android-acd484febac47e6b",
             "editor": "textfield"
         },
         "max_followers": {
             "title": "Max Followers",
             "type": "integer",
-            "description": "Max followers to scrape (empty = all)",
+            "description": "Limit (empty = all)",
+            "editor": "number"
+        },
+        "delay": {
+            "title": "Delay (seconds)",
+            "type": "number",
+            "default": 2.0,
             "editor": "number"
         }
     },
-    "required": ["username", "session_id", "csrf_token"]
+    "required": ["user_id", "authorization"]
 }
