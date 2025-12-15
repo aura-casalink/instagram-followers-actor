@@ -43,8 +43,7 @@
             "type": "integer",
             "description": "Maximum number of followers to scrape. Leave empty for all.",
             "editor": "number",
-            "minimum": 1,
-            "default": null
+            "minimum": 1
         },
         "delay": {
             "title": "Delay Between Requests (seconds)",
