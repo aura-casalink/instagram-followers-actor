@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Apify storage
+apify_storage/
+storage/
+
+# Local testing
+.env
+*.json
+!input_schema.json
+
+# OS
+.DS_Store
+Thumbs.db

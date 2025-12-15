@@ -1,0 +1,66 @@
+{
+    "title": "Instagram Followers Scraper Input",
+    "description": "Configuration for the Instagram Followers Scraper",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "user_id": {
+            "title": "User ID",
+            "type": "string",
+            "description": "Instagram user ID (numeric). You can find this using the mobile app inspection.",
+            "editor": "textfield",
+            "example": "71392995955"
+        },
+        "authorization_token": {
+            "title": "Authorization Token",
+            "type": "string",
+            "description": "Bearer token from Instagram app. Format: Bearer IGT:2:xxxxx",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "cookie_x_mid": {
+            "title": "Cookie: x-mid",
+            "type": "string",
+            "description": "x-mid cookie value from Instagram session",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "cookie_ds_user_id": {
+            "title": "Cookie: ig-u-ds-user-id",
+            "type": "string",
+            "description": "ds_user_id cookie value (usually same as user_id)",
+            "editor": "textfield"
+        },
+        "cookie_rur": {
+            "title": "Cookie: ig-u-rur",
+            "type": "string",
+            "description": "rur cookie value from Instagram session",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "max_followers": {
+            "title": "Max Followers",
+            "type": "integer",
+            "description": "Maximum number of followers to scrape. Leave empty for all.",
+            "editor": "number",
+            "minimum": 1,
+            "default": null
+        },
+        "delay": {
+            "title": "Delay Between Requests (seconds)",
+            "type": "number",
+            "description": "Delay between pagination requests to avoid rate limiting",
+            "editor": "number",
+            "default": 2.0,
+            "minimum": 0.5,
+            "maximum": 10
+        },
+        "webhook_url": {
+            "title": "Webhook URL",
+            "type": "string",
+            "description": "Optional webhook URL to notify when scraping is complete (for n8n integration)",
+            "editor": "textfield"
+        }
+    },
+    "required": ["user_id", "authorization_token"]
+}
